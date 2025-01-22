@@ -1,35 +1,52 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_shopping_list_app/const.dart';
 import 'package:flutter_shopping_list_app/data/dummy_categories.dart';
 import 'package:flutter_shopping_list_app/models/category.dart';
 import 'package:flutter_shopping_list_app/models/grocery.dart';
+import 'package:http/http.dart' as http;
 
 class AddGroceryItem extends StatefulWidget {
   const AddGroceryItem({super.key});
 
   @override
-  State<AddGroceryItem> createState() => _NewGroceryItemState();
+  State<AddGroceryItem> createState() => _AddGroceryItemState();
 }
 
-class _NewGroceryItemState extends State<AddGroceryItem> {
+class _AddGroceryItemState extends State<AddGroceryItem> {
   final _formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
+  String _name = '';
+  int _quantity = 1;
+  Category _category = categories[Categories.other]!;
 
-  final Map<String, Object?> _formValues = {
-    'name': '',
-    'quantity': '1',
-    'category': null,
-  };
-
-  void _saveForm() {
+  void _saveForm() async {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
-      Navigator.of(context).pop(
-        Grocery(
-          id: DateTime.now().toString(),
-          name: _formValues['name'] as String,
-          quantity: int.parse(_formValues['quantity'] as String),
-          category: _formValues['category'] as Category,
-        ),
+
+      setState(() => _isLoading = true);
+
+      final response = await http.post(
+        Uri.https(apiBaseUrl, 'shopping-list.json'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'name': _name,
+          'quantity': _quantity,
+          'category': _category.title,
+        }),
       );
+
+      if (context.mounted) {
+        Navigator.of(context).pop(
+          Grocery(
+            id: jsonDecode(response.body)['name'],
+            name: _name,
+            quantity: _quantity,
+            category: _category,
+          ),
+        );
+      }
     }
   }
 
@@ -60,7 +77,7 @@ class _NewGroceryItemState extends State<AddGroceryItem> {
                   }
                   return null;
                 },
-                onSaved: (value) => _formValues['name'] = value,
+                onSaved: (value) => _name = value!,
               ),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -83,11 +100,12 @@ class _NewGroceryItemState extends State<AddGroceryItem> {
                         }
                         return null;
                       },
-                      onSaved: (value) => _formValues['quantity'] = value,
+                      onSaved: (value) => _quantity = int.parse(value!),
                     ),
                   ),
                   Expanded(
                     child: DropdownButtonFormField(
+                      value: _category,
                       decoration: const InputDecoration(labelText: 'Category'),
                       validator: (value) {
                         if (value == null) {
@@ -95,8 +113,8 @@ class _NewGroceryItemState extends State<AddGroceryItem> {
                         }
                         return null;
                       },
-                      onSaved: (value) => _formValues['category'] = value,
-                      onChanged: (value) => _formValues['category'] = value,
+                      onSaved: (value) => _category = value!,
+                      onChanged: (value) => _category = value!,
                       items: [
                         for (final category in categories.entries)
                           DropdownMenuItem(
@@ -125,12 +143,22 @@ class _NewGroceryItemState extends State<AddGroceryItem> {
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     TextButton(
-                      onPressed: _resetForm,
+                      onPressed: _isLoading ? null : _resetForm,
                       child: const Text('Reset'),
                     ),
                     FilledButton(
-                      onPressed: _saveForm,
-                      child: const Text('Save'),
+                      onPressed: _isLoading ? null : _saveForm,
+                      child: _isLoading
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: Center(
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                ),
+                              ),
+                            )
+                          : const Text('Save'),
                     ),
                   ],
                 ),
