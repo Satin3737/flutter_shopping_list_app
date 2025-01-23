@@ -25,43 +25,56 @@ class _GroceriesScreenState extends State<GroceriesScreen> {
     _fetchGroceries();
   }
 
-  _fetchGroceries() async {
+  void _fetchGroceries() async {
     bool isError = false;
-    setState(() => _isLoading = true);
 
-    final response = await http.get(
-      Uri.https(apiBaseUrl, 'shopping-list.json'),
-      headers: {'Content-Type': 'application/json'},
-    );
+    try {
+      setState(() => _isLoading = true);
 
-    final Map<String, dynamic> resBody = jsonDecode(response.body);
+      final response = await http.get(
+        Uri.https(apiBaseUrl, 'shopping-list.json'),
+      );
 
-    if (response.statusCode >= 400) {
-      isError = true;
+      if (response.body == 'null') {
+        setState(() => (_isLoading = false, _groceries = []));
+        return;
+      }
 
+      final Map<String, dynamic> resBody = jsonDecode(response.body);
+
+      if (response.statusCode >= 400) {
+        isError = true;
+
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('An error occurred! Try again later.')),
+          );
+        }
+      }
+
+      setState(() {
+        isError
+            ? _groceries = []
+            : _groceries = resBody.entries
+                .map((entry) => Grocery(
+                    id: entry.key,
+                    name: entry.value['name'],
+                    quantity: entry.value['quantity'],
+                    category: categories.entries
+                        .firstWhere(
+                          (cat) => cat.value.title == entry.value['category'],
+                        )
+                        .value))
+                .toList();
+        _isLoading = false;
+      });
+    } catch (error) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('An error occurred! Try again later.')),
+          SnackBar(content: Text('Something went wrong!')),
         );
       }
     }
-
-    setState(() {
-      isError
-          ? _groceries = []
-          : _groceries = resBody.entries
-              .map((entry) => Grocery(
-                  id: entry.key,
-                  name: entry.value['name'],
-                  quantity: entry.value['quantity'],
-                  category: categories.entries
-                      .firstWhere(
-                        (cat) => cat.value.title == entry.value['category'],
-                      )
-                      .value))
-              .toList();
-      _isLoading = false;
-    });
   }
 
   void _addNewGroceryItem() async {
@@ -72,16 +85,41 @@ class _GroceriesScreenState extends State<GroceriesScreen> {
   }
 
   void _removeGroceryItem(Grocery grocery, int index) {
+    bool isRemoving = true;
+
     setState(() => _groceries.remove(grocery));
+
+    void revertRemoval() {
+      isRemoving = false;
+      setState(() => _groceries.insert(index, grocery));
+    }
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('${grocery.name} removed from your groceries'),
+        onVisible: () => Future.delayed(
+          const Duration(seconds: 4),
+          () async {
+            if (!isRemoving) return;
+
+            final response = await http.delete(
+              Uri.https(apiBaseUrl, 'shopping-list/${grocery.id}.json'),
+            );
+
+            if (response.statusCode >= 400) {
+              revertRemoval();
+
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('An error occurred while removing!')),
+                );
+              }
+            }
+          },
+        ),
         action: SnackBarAction(
           label: 'Undo',
-          onPressed: () => setState(
-            () => _groceries.insert(index, grocery),
-          ),
+          onPressed: revertRemoval,
         ),
       ),
     );
