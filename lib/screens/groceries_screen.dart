@@ -26,28 +26,42 @@ class _GroceriesScreenState extends State<GroceriesScreen> {
   }
 
   _fetchGroceries() async {
+    bool isError = false;
     setState(() => _isLoading = true);
+
     final response = await http.get(
       Uri.https(apiBaseUrl, 'shopping-list.json'),
       headers: {'Content-Type': 'application/json'},
     );
 
-    final Map<String, dynamic> list = jsonDecode(response.body);
+    final Map<String, dynamic> resBody = jsonDecode(response.body);
+
+    if (response.statusCode >= 400) {
+      isError = true;
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('An error occurred! Try again later.')),
+        );
+      }
+    }
 
     setState(() {
-      _groceries = list.entries
-          .map((entry) => Grocery(
-              id: entry.key,
-              name: entry.value['name'],
-              quantity: entry.value['quantity'],
-              category: categories.entries
-                  .firstWhere(
-                    (cat) => cat.value.title == entry.value['category'],
-                  )
-                  .value))
-          .toList();
+      isError
+          ? _groceries = []
+          : _groceries = resBody.entries
+              .map((entry) => Grocery(
+                  id: entry.key,
+                  name: entry.value['name'],
+                  quantity: entry.value['quantity'],
+                  category: categories.entries
+                      .firstWhere(
+                        (cat) => cat.value.title == entry.value['category'],
+                      )
+                      .value))
+              .toList();
+      _isLoading = false;
     });
-    _isLoading = false;
   }
 
   void _addNewGroceryItem() async {
