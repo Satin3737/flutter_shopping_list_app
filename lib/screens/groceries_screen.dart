@@ -26,55 +26,45 @@ class _GroceriesScreenState extends State<GroceriesScreen> {
   }
 
   void _fetchGroceries() async {
-    bool isError = false;
+    setState(() => _isLoading = true);
 
-    try {
-      setState(() => _isLoading = true);
+    final response = await http.get(
+      Uri.https(apiBaseUrl, 'shopping-list.json'),
+    );
 
-      final response = await http.get(
-        Uri.https(apiBaseUrl, 'shopping-list.json'),
-      );
+    final isError = response.statusCode >= 400;
 
-      if (response.body == 'null') {
-        setState(() => (_isLoading = false, _groceries = []));
-        return;
-      }
+    if (isError || response.body == 'null') {
+      setState(() => (_isLoading = false, _groceries = []));
 
-      final Map<String, dynamic> resBody = jsonDecode(response.body);
-
-      if (response.statusCode >= 400) {
-        isError = true;
-
+      if (isError) {
         if (context.mounted) {
+          ScaffoldMessenger.of(context).clearSnackBars();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('An error occurred! Try again later.')),
           );
         }
       }
 
-      setState(() {
-        isError
-            ? _groceries = []
-            : _groceries = resBody.entries
-                .map((entry) => Grocery(
-                    id: entry.key,
-                    name: entry.value['name'],
-                    quantity: entry.value['quantity'],
-                    category: categories.entries
-                        .firstWhere(
-                          (cat) => cat.value.title == entry.value['category'],
-                        )
-                        .value))
-                .toList();
-        _isLoading = false;
-      });
-    } catch (error) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Something went wrong!')),
-        );
-      }
+      return;
     }
+
+    final Map<String, dynamic> resBody = jsonDecode(response.body);
+
+    setState(() {
+      _groceries = resBody.entries
+          .map((entry) => Grocery(
+              id: entry.key,
+              name: entry.value['name'],
+              quantity: entry.value['quantity'],
+              category: categories.entries
+                  .firstWhere(
+                    (cat) => cat.value.title == entry.value['category'],
+                  )
+                  .value))
+          .toList();
+      _isLoading = false;
+    });
   }
 
   void _addNewGroceryItem() async {

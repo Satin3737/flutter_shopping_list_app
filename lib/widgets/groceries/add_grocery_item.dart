@@ -37,6 +37,16 @@ class _AddGroceryItemState extends State<AddGroceryItem> {
         }),
       );
 
+      if (response.statusCode >= 400) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('An error occurred! Try again later.')),
+          );
+        }
+        setState(() => _isLoading = false);
+        return;
+      }
+
       if (context.mounted) {
         Navigator.of(context).pop(
           Grocery(
@@ -147,6 +157,7 @@ class _AddGroceryItemState extends State<AddGroceryItem> {
                       child: const Text('Reset'),
                     ),
                     FilledButton(
+                      style: FilledButton.styleFrom(minimumSize: Size(96, 32)),
                       onPressed: _isLoading ? null : _saveForm,
                       child: _isLoading
                           ? const SizedBox(
